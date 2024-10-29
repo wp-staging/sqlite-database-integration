@@ -4,3 +4,4 @@ composer.lock
 .phpunit.result.cache
 ._.DS_Store
 .DS_Store
+._*
