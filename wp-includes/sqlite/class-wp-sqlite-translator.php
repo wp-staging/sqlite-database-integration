@@ -199,7 +199,7 @@ class WP_SQLite_Translator {
 	 *
 	 * @var array reference to the PHP object
 	 */
-	private $results = null;
+	public $results = null;
 
 	/**
 	 * Class variable to check if there is an error.
@@ -871,12 +871,45 @@ class WP_SQLite_Translator {
 		}
 	}
 
+    private function get_first_table_name()
+    {
+        // Use a regular expression to match the table name following 'CREATE TABLE'
+        if (preg_match('/CREATE TABLE\s+`([^`]+)`/i', $this->mysql_query, $matches)) {
+            return $matches[1];
+        }
+        throw new Exception( 'Not able to extract the first table name from the query ' . $this->mysql_query );
+    }
+
+    private function get_second_table_name()
+    {
+        // Use a regular expression to match the table name following 'LIKE'
+        if (preg_match('/LIKE\s+`([^`]+)`/i', $this->mysql_query, $matches)) {
+            return $matches[1];
+        }
+        throw new Exception( 'Not able to extract the second table name from the query ' . $this->mysql_query );
+    }
+
+    private function execute_copy_table()
+    {
+        $table = $this->get_first_table_name();
+        $like_table = $this->get_second_table_name();
+
+        $this->execute_sqlite_query("CREATE TABLE \"{$table}\" AS SELECT * FROM \"{$like_table}\"");
+    }
+
 	/**
 	 * Executes a MySQL CREATE TABLE query in SQLite.
 	 *
 	 * @throws Exception If the query is not supported.
 	 */
 	private function execute_create_table() {
+
+        // If the query contains LIKE, handle it differently because this query intents a coping process.
+        if (strpos($this->mysql_query, 'LIKE') !== false) {
+            $this->execute_copy_table();
+            return;
+        }
+
 		$table = $this->parse_create_table();
 
 		$definitions = array();
@@ -3546,7 +3579,9 @@ class WP_SQLite_Translator {
 				// [LIKE 'pattern' | WHERE expr]
 				if ( 'LIKE' === $database_expression->token ) {
 					$pattern = $this->rewriter->consume()->value;
-				} elseif ( 'WHERE' === $database_expression->token ) {
+				} elseif ( null === $database_expression->token ) {
+                    // continue
+                } elseif ( 'WHERE' === $database_expression->token ) {
 					// @TODO Support me please.
 				} elseif ( ';' !== $database_expression->token ) {
 					throw new Exception( 'Syntax error: Unexpected token ' . $database_expression->token . ' in query ' . $this->mysql_query );
@@ -3625,6 +3660,16 @@ class WP_SQLite_Translator {
 					case 'VARIABLES':
 						$this->results = true;
 						return;
+
+                    case 'GRANTS':
+                        $this->set_results_from_fetched_data(
+                            array(
+                                (object) array(
+                                    'Grants for root@localhost' => 'GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, SHUTDOWN, PROCESS, FILE, REFERENCES, INDEX, ALTER, SHOW DATABASES, SUPER, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW, SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER, CREATE TABLESPACE, CREATE ROLE, DROP ROLE ON *.* TO `root`@`localhost` WITH GRANT OPTION',
+                                ),
+                            )
+                        );
+                        return;
 
 					default:
 						throw new Exception( 'Unknown show type: ' . $what );
