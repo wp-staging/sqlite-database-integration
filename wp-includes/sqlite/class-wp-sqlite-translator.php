@@ -871,24 +871,28 @@ class WP_SQLite_Translator {
 		}
 	}
 
-    private function getFirstTableName() {
+    private function get_first_table_name()
+    {
         // Use a regular expression to match the table name following 'CREATE TABLE'
         if (preg_match('/CREATE TABLE\s+`([^`]+)`/i', $this->mysql_query, $matches)) {
             return $matches[1];
         }
-        return null;
+        throw new Exception( 'Not able to extract the first table name from the query ' . $this->mysql_query );
     }
-    private function getSecondTableName() {
+
+    private function get_second_table_name()
+    {
         // Use a regular expression to match the table name following 'LIKE'
         if (preg_match('/LIKE\s+`([^`]+)`/i', $this->mysql_query, $matches)) {
             return $matches[1];
         }
-        return null;
+        throw new Exception( 'Not able to extract the second table name from the query ' . $this->mysql_query );
     }
 
-    private function execute_copy_table() {
-        $table = $this->getFirstTableName();
-        $like_table = $this->getSecondTableName();
+    private function execute_copy_table()
+    {
+        $table = $this->get_first_table_name();
+        $like_table = $this->get_second_table_name();
 
         $this->execute_sqlite_query("CREATE TABLE \"{$table}\" AS SELECT * FROM \"{$like_table}\"");
     }
